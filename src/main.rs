@@ -43,7 +43,11 @@ impl Display for BatteryStatus {
         }
 
         for charge in &self.charges {
-            write!(f, "{:.0} ", charge)?;
+            if *charge <= 15.0 {
+                write!(f, "+@fg=1;{:.0}+@fg=0; ", charge)?;
+            } else {
+                write!(f, "{:.0} ", charge)?;
+            };
         }
 
         f.write_str("| ")?;
