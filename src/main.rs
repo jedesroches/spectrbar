@@ -8,9 +8,6 @@ pub mod batt;
     want to silently ignore errors: it's ok if some things aren't here, just
     print the rest...
 
-    XXX somehow less flexible / safe than the shell script, since removing a
-    battery won't be detected
-
     TODO while this is called from the script, it should be a oneshot, but
     ideally I would like to update different parts of the bar at different intervals:
 
@@ -20,9 +17,12 @@ pub mod batt;
 */
 
 fn main() -> Result<(), battery::Error> {
-    let manager = battery::Manager::new()?;
-    let mut my_batteries: Vec<Battery> = manager.batteries()?.flatten().collect();
+    let battery_manager = battery::Manager::new()?;
+    let mut my_batteries: Vec<Battery> = battery_manager.batteries()?.flatten().collect();
 
-    println!("{}", update_battery(&manager, my_batteries.iter_mut()));
+    println!(
+        "{}",
+        update_battery(&battery_manager, my_batteries.iter_mut())
+    );
     Ok(())
 }
