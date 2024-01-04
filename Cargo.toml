@@ -10,3 +10,4 @@ codegen-units = 1
 
 [dependencies]
 battery = "0.7.8"
+dbus = "0.9.7"

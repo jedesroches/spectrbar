@@ -18,7 +18,11 @@ pub mod batt;
     - ...
 */
 
-fn main() -> Result<(), battery::Error> {
+fn main() {
+    println!("Hello, world");
+}
+
+fn oldmain() -> Result<(), battery::Error> {
     let delay = time::Duration::from_secs(5);
     let battery_manager = battery::Manager::new()?;
     let mut my_batteries: Vec<Battery> = battery_manager.batteries()?.flatten().collect();
