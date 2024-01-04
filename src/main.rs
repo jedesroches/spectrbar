@@ -34,6 +34,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "{}",
             update_battery(&battery_manager, my_batteries.iter_mut())
         );
+        println!();
         io::stdout().flush()?;
         thread::sleep(delay);
     }
