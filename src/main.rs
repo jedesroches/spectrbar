@@ -1,9 +1,12 @@
 use battery::Battery;
-use std::{thread, time};
+use std::io::Write;
+use std::{io, thread, time};
 
 use crate::batt::update_battery;
+use crate::wifi::get_connected_network;
 
 pub mod batt;
+pub mod wifi;
 
 /*
     The whole error management thing is a bit weird, since for once we actually
@@ -18,20 +21,20 @@ pub mod batt;
     - ...
 */
 
-fn main() {
-    println!("Hello, world");
-}
-
-fn oldmain() -> Result<(), battery::Error> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let delay = time::Duration::from_secs(5);
     let battery_manager = battery::Manager::new()?;
     let mut my_batteries: Vec<Battery> = battery_manager.batteries()?.flatten().collect();
 
     loop {
-        println!(
+        if let Some(network_name) = get_connected_network()? {
+            print!("{}", network_name);
+        }
+        print!(
             "{}",
             update_battery(&battery_manager, my_batteries.iter_mut())
         );
+        io::stdout().flush()?;
         thread::sleep(delay);
     }
 }
