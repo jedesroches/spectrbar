@@ -24,13 +24,11 @@ type InterfaceToPropertiesMap = HashMap<String, PropMap>;
 type ManagedObjects = HashMap<Path<'static>, InterfaceToPropertiesMap>;
 
 pub fn get_connected_network(sys_bus_conn: &Connection) -> Result<Option<String>, dbus::Error> {
-    // TODO: how to use lifetimes to fix this if-let tornado and use and_then instead ?
-    if let Some(station_properties) = get_device_station_properties(sys_bus_conn)? {
-        return get_connected_network_path(&station_properties)
-            .map(|props| get_network_name(sys_bus_conn, props))
-            .transpose();
-    };
-    Ok(None)
+    get_device_station_properties(sys_bus_conn)?
+        .as_ref()
+        .and_then(|props| get_connected_network_path(props))
+        .map(|path| get_network_name(sys_bus_conn, path))
+        .transpose()
 }
 
 fn get_device_station_properties(
