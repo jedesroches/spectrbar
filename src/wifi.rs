@@ -1,34 +1,64 @@
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 use dbus::{
+    arg::{prop_cast, PropMap},
     blocking::{stdintf::org_freedesktop_dbus::Properties, Connection},
     Path,
 };
 
 const IWD_BUS: &str = "net.connman.iwd";
+const TIMEOUT: Duration = Duration::from_millis(500);
+
+// Interfaces
 const IWD_STATION_INTERFACE: &str = "net.connman.iwd.Station";
 const IWD_NETWORK_INTERFACE: &str = "net.connman.iwd.Network";
+const DBUS_OBJ_MANAGER_INTERFACE: &str = "org.freedesktop.DBus.ObjectManager";
 
-// FIXME: How can I find this out without hardcoding it ?
-const IWD_DEVICE_PATH: &str = "/net/connman/iwd/0/5";
+// Methods
+const DBUS_GET_MANAGED_OBJECTS: &str = "GetManagedObjects";
 
-pub fn get_connected_network() -> Result<Option<String>, Box<dyn std::error::Error>> {
-    let sys_bus_conn = Connection::new_system()?;
-    let station_proxy =
-        sys_bus_conn.with_proxy(IWD_BUS, IWD_DEVICE_PATH, Duration::from_millis(500));
+// Properties
+const CONNECTED_NETWORK_PROPERTY: &str = "ConnectedNetwork";
 
-    if let Ok(connected_path) = station_proxy.get::<Path>(IWD_STATION_INTERFACE, "ConnectedNetwork")
-    {
-        let network_proxy =
-            sys_bus_conn.with_proxy(IWD_BUS, connected_path, Duration::from_millis(500));
+type InterfaceToPropertiesMap = HashMap<String, PropMap>;
+type ManagedObjects = HashMap<Path<'static>, InterfaceToPropertiesMap>;
 
-        if network_proxy.get::<bool>(IWD_NETWORK_INTERFACE, "Connected")? {
-            return Ok(Some(format!(
-                "{} | ",
-                network_proxy.get::<String>(IWD_NETWORK_INTERFACE, "Name")?,
-            )));
-        }
+pub fn get_connected_network(
+    sys_bus_conn: &Connection,
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    // TODO: how to use lifetimes to fix this if-let tornado and use and_then instead ?
+    if let Some(station_properties) = get_device_station_properties(sys_bus_conn)? {
+        if let Some(network_path) = get_connected_network_path(&station_properties) {
+            let network_name = get_network_name(sys_bus_conn, network_path)?;
+            return Ok(Some(network_name));
+        };
     }
-
     Ok(None)
+}
+
+fn get_device_station_properties(
+    connection: &Connection,
+) -> Result<Option<InterfaceToPropertiesMap>, Box<dyn std::error::Error>> {
+    let iwd_root_proxy = connection.with_proxy(IWD_BUS, "/", TIMEOUT);
+    let (managed_objects,): (ManagedObjects,) =
+        iwd_root_proxy.method_call(DBUS_OBJ_MANAGER_INTERFACE, DBUS_GET_MANAGED_OBJECTS, ())?;
+
+    Ok(managed_objects
+        .into_iter()
+        .find(|(_, properties)| properties.contains_key(IWD_STATION_INTERFACE))
+        .map(|(_, properties)| properties))
+}
+
+fn get_network_name(connection: &Connection, network_path: &Path) -> Result<String, dbus::Error> {
+    connection
+        .with_proxy(IWD_BUS, network_path, TIMEOUT)
+        .get::<String>(IWD_NETWORK_INTERFACE, "Name")
+}
+
+fn get_connected_network_path(
+    station_properties: &InterfaceToPropertiesMap,
+) -> Option<&Path<'static>> {
+    station_properties
+        .get(IWD_STATION_INTERFACE)
+        .and_then(|state| prop_cast(state, CONNECTED_NETWORK_PROPERTY))
 }
