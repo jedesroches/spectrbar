@@ -9,24 +9,26 @@ pub struct BatteryStatus {
 
 impl Display for BatteryStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if !self.charging && self.charges.is_empty() {
-            return Ok(());
-        }
+        // https://github.com/rust-lang/rust/issues/79524
+        // Usage of a Vec instead of just normal iterators here is due to the existence
+        // of the join(): Vec[T] -> T -> Vec[T] method, whereas intersperse on iterators
+        // is still an experimental feature.
+        // TODO: use iterators once the above is in stable Rust.
+        let mut element_builder: Vec<String> = Vec::new();
 
         if self.charging {
-            f.write_str("⚇ ")?;
+            element_builder.push("⚇".to_string());
         }
 
-        for charge in &self.charges {
-            if *charge <= 15.0 {
-                write!(f, "+@fg=1;{:.0}+@fg=0; ", charge)?;
-            } else {
-                write!(f, "{:.0} ", charge)?;
-            };
-        }
+        let mut formatted_charges = self
+            .charges
+            .iter()
+            .map(|c| charge_to_string(*c))
+            .collect::<Vec<String>>();
 
-        f.write_str("| ")?;
+        element_builder.append(&mut formatted_charges);
 
+        write!(f, "{}", element_builder.join(" "))?;
         Ok(())
     }
 }
@@ -36,18 +38,20 @@ pub fn update_battery(manager: &battery::Manager, batteries: IterMut<Battery>) -
     let mut charges: Vec<f32> = Vec::new();
 
     for battery in batteries {
-        match manager.refresh(battery) {
-            Ok(()) => {
-                match battery.state() {
-                    battery::State::Charging => charging = true,
-                    _ => (),
-                }
-                charges.push(battery.state_of_charge().get::<percent>())
-            }
-            Err(_) => (),
+        if let Ok(()) = manager.refresh(battery) {
+            charging = charging || battery.state() == battery::State::Charging;
+            charges.push(battery.state_of_charge().get::<percent>())
         }
     }
     BatteryStatus { charging, charges }
+}
+
+fn charge_to_string(charge: f32) -> String {
+    if charge <= 15.0 {
+        format!("+@fg=1;{:.0}+@fg=0;", charge)
+    } else {
+        format!("{:.0}", charge)
+    }
 }
 
 #[cfg(test)]
@@ -71,7 +75,7 @@ mod tests {
             charges: Vec::new(),
         };
         let result = format!("{}", sut);
-        assert_eq!("⚇ | ", result);
+        assert_eq!("⚇", result);
     }
 
     #[test]
@@ -82,7 +86,7 @@ mod tests {
             charges,
         };
         let result = format!("{}", sut);
-        assert_eq!("42 | ", result);
+        assert_eq!("42", result);
     }
 
     #[test]
@@ -93,7 +97,7 @@ mod tests {
             charges,
         };
         let result = format!("{}", sut);
-        assert_eq!("42 43 | ", result);
+        assert_eq!("42 43", result);
     }
 
     #[test]
@@ -104,7 +108,7 @@ mod tests {
             charges,
         };
         let result = format!("{}", sut);
-        assert_eq!("⚇ 70 60 50 | ", result);
+        assert_eq!("⚇ 70 60 50", result);
     }
 
     #[test]
@@ -115,6 +119,6 @@ mod tests {
             charges,
         };
         let result = format!("{}", sut);
-        assert_eq!("+@fg=1;15+@fg=0; 16 | ", result);
+        assert_eq!("+@fg=1;15+@fg=0; 16", result);
     }
 }
