@@ -23,22 +23,19 @@ const CONNECTED_NETWORK_PROPERTY: &str = "ConnectedNetwork";
 type InterfaceToPropertiesMap = HashMap<String, PropMap>;
 type ManagedObjects = HashMap<Path<'static>, InterfaceToPropertiesMap>;
 
-pub fn get_connected_network(
-    sys_bus_conn: &Connection,
-) -> Result<Option<String>, Box<dyn std::error::Error>> {
+pub fn get_connected_network(sys_bus_conn: &Connection) -> Result<Option<String>, dbus::Error> {
     // TODO: how to use lifetimes to fix this if-let tornado and use and_then instead ?
     if let Some(station_properties) = get_device_station_properties(sys_bus_conn)? {
-        if let Some(network_path) = get_connected_network_path(&station_properties) {
-            let network_name = get_network_name(sys_bus_conn, network_path)?;
-            return Ok(Some(network_name));
-        };
-    }
+        return get_connected_network_path(&station_properties)
+            .map(|props| get_network_name(sys_bus_conn, props))
+            .transpose();
+    };
     Ok(None)
 }
 
 fn get_device_station_properties(
     connection: &Connection,
-) -> Result<Option<InterfaceToPropertiesMap>, Box<dyn std::error::Error>> {
+) -> Result<Option<InterfaceToPropertiesMap>, dbus::Error> {
     let iwd_root_proxy = connection.with_proxy(IWD_BUS, "/", TIMEOUT);
     let (managed_objects,): (ManagedObjects,) =
         iwd_root_proxy.method_call(DBUS_OBJ_MANAGER_INTERFACE, DBUS_GET_MANAGED_OBJECTS, ())?;
